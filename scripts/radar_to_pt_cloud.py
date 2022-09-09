@@ -18,11 +18,14 @@ class radar_to_pt:
 
         self.scan_duration = rospy.Duration.from_sec(0.250)
 
-        self.threshold = 80.0
+        self.threshold = 0.0
 
-        self.offset = 19
+        self.offset = 11
 
-        self.radar_frame = 'aft_mapped' #os_lidar
+        self.x_offset = 0.5 # offset pointcloud origin, currently set so radar and lidar are in the same frame so a static tf isn't nessisary for the Warthog data
+        self.y_offset = 0.225
+
+        self.radar_frame = 'os_lidar' #os_lidar
 
         self.pt_cloud_pub = rospy.Publisher("~radar_pointcloud", PointCloud2, queue_size = 1)
 
@@ -39,7 +42,7 @@ class radar_to_pt:
 
         intensity = intensity[:,self.offset:]
 
-        r, theta = np.meshgrid(np.linspace(self.offset * self.range_resolution,self.range_resolution * (intensity.shape[1]+self.offset),intensity.shape[1],dtype=np.float32), np.linspace(np.pi*2.0 + np.pi,0.0 + np.pi,intensity.shape[0],endpoint=False,dtype=np.float32))
+        r, theta = np.meshgrid(np.linspace(0.0*self.offset * self.range_resolution,self.range_resolution * (intensity.shape[1]+self.offset),intensity.shape[1],dtype=np.float32), np.linspace(np.pi*2.0 + np.pi,0.0 + np.pi,intensity.shape[0],endpoint=False,dtype=np.float32))
 
         x = np.cos(theta) * r
         y = np.sin(theta) * r
@@ -76,7 +79,7 @@ class radar_to_pt:
                 oldest = self.rotation_data.popleft()
 
             times = np.linspace(scan_start_time.to_sec(),data.header.stamp.to_sec(),intensity.shape[0])
-            i = intensity.shape[0] - 1
+            i = 0#intensity.shape[0] - 1
             
 
             for line_time in times:
@@ -95,8 +98,8 @@ class radar_to_pt:
                 orentation = tf.transformations.quaternion_multiply(orentation, ending_orentation)
                 r = tf.transformations.quaternion_matrix(orentation)
                 
-                x1[i,:] = r[0,0] * x[i,:] + r[0,1] * y[i,:] 
-                y1[i,:] = r[1,0] * x[i,:] + r[1,1] * y[i,:] 
+                x1[i,:] = r[0,0] * x[i,:] + r[0,1] * y[i,:] + self.x_offset 
+                y1[i,:] = r[1,0] * x[i,:] + r[1,1] * y[i,:] + self.y_offset
                 z1[i,:] = r[2,0] * x[i,:] + r[2,1] * y[i,:] 
 
 
@@ -107,7 +110,7 @@ class radar_to_pt:
 
                 # x = r1*x + r2*y + r3*z
 
-                i -= 1
+                i += 1
 
 
             ## Publish pointcloud
@@ -122,7 +125,7 @@ class radar_to_pt:
 
         #q = tf.transformations.quaternion_from_euler(data.RPY.x, data.RPY.y, data.RPY.z)
         
-        q = tf.transformations.quaternion_from_euler(np.radians(data.RPY.x), np.radians(-data.RPY.y), np.radians(-data.RPY.z))
+        q = tf.transformations.quaternion_from_euler(np.radians(data.RPY.x), np.radians(-data.RPY.y), np.radians(data.RPY.z)) # I'm mostly sure this is right
         self.rotation_data.append((data.header.stamp,q))
         #print(q)
         
